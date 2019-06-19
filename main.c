@@ -50,7 +50,7 @@ void getLine(char* line_, int* lineSz_)
 	}
 }
 
-void getTokens(char** args_array, char* line, int* ntok_read, int* args_sz, char **ifile, char **ofile)
+void getTokens(char** args_array, char* line, int* ntok_read, int* args_sz, char **ifile, char **ofile, int* fd)
 {
     // découper la ligne en tokens (fonction strtok)
 	// stocker dans args_array et traiter les redirections
@@ -61,16 +61,27 @@ void getTokens(char** args_array, char* line, int* ntok_read, int* args_sz, char
 	while (token != NULL)
 	{
 		// Redirections ?
-		if (!strcmp(token,"<") || !strcmp(token,">"))
+		if (!strcmp(token,"<") || !strcmp(token,">")|| !strcmp(token,"2>"))
 		{
-			char redirect = token[0];
+			char redirect[2];
+			strcpy(redirect, token);
 			token = strtok(NULL, " "); //nom du fichier (token suivant)
 
-			if (redirect=='<')
+			if (!strcmp(redirect, "<"))
+			{
 				*ifile = token;
-			else
+				*fd = fileno(stdin);
+			}
+			else if(!strcmp(redirect, ">"))
 			{
 				*ofile = token; // redirection de sortie
+				*fd = fileno(stdout);
+				
+			}
+			else if(!strcmp(redirect, "2>"))
+			{
+				*ofile = token; // redirection de sortie
+				*fd = fileno(stderr);
 			}
 		}
 		else
@@ -137,15 +148,14 @@ int internalCommands(char** args_array, int nb, char** cwd, int cwdBuffSize)
 
 	else if(!strcmp(args_array[0], "ls"))
 	{
-		if(nb != 1)
+		if(nb != 2)
 		{
 			printf(	"Incorrect usage of 'ls':\n"
-					"ls\n");
+					"ls '-option'\n");
 			return 1;
 		}
 
-		ls(getcwd(NULL, 0));
-
+		ls(getcwd(NULL, 0), args_array, strlen(args_array[1]));
 		return 1;
 	}
 	return 0;
@@ -180,10 +190,9 @@ int main(int argc, char** argv)
         int ntok_read = 0, args_sz = 10;
 		char** args_array = (char **)calloc(10, sizeof(char*));
 		char *ifile = NULL, *ofile = NULL; // fichiers de redirection (entrée, sortie)
-
-		getTokens(args_array, line, &ntok_read, &args_sz, &ifile, &ofile); // Sépare la ligne en tokens
-        if(internalCommands(args_array, ntok_read, &cwd, BUFFSIZE)) // Test si la commande est une commande interne
-			continue;
+		int fd = 0;
+		
+		getTokens(args_array, line, &ntok_read, &args_sz, &ifile, &ofile, &fd); // Sépare la ligne en tokens
 
 		pid_t pid = fork();
 		if (pid == 0)
@@ -193,12 +202,12 @@ int main(int argc, char** argv)
 			if (ifile)
 			{
 				i_desc = open(ifile, O_RDONLY);
-				dup2(i_desc, fileno(stdin)); //or STDIN_FILENO ...
+				dup2(i_desc, fd); //or STDIN_FILENO ...
 			}
 			if (ofile)
 			{
 				o_desc = open(ofile, O_CREAT | O_WRONLY, 0644);
-				dup2(o_desc, fileno(stdout)); //or STDOUT_FILENO ...
+				dup2(o_desc, fd); //or STDOUT_FILENO ...
 			}
 			// Original files can be closed: they just have been duplicated
 			if (ifile)
@@ -206,11 +215,15 @@ int main(int argc, char** argv)
 			if (ofile)
 				close(o_desc);
 			/*** The command is executed here ***/
-			execv(args_array[0], args_array);
-			/***                              ***/
-			// If the program arrives here, execvp failed
-			fprintf(stderr, "Error while launching %s\n", args_array[0]);
-			exit(EXIT_FAILURE);
+			if(!internalCommands(args_array, ntok_read, &cwd, BUFFSIZE))
+			{
+				execv(args_array[0], args_array);
+				/***                              ***/
+				// If the program arrives here, execvp failed
+				fprintf(stderr, "Error while launching %s\n", args_array[0]);
+				exit(EXIT_FAILURE);
+			}
+			exit(0);
 		}
 		else if (pid > 0)
 		{

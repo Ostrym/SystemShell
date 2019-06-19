@@ -161,24 +161,106 @@ int cat(const char* path){
 // du répertoire courant
 //------------------------------------------------
 
-int ls(char* path)
-{
-    DIR* rep = opendir(path);
-    if (rep == NULL)
-    {
-        perror("Error");
-        return -1;
+int ls(const char* path, char** options, const int opt_size){
+    DIR *directory;
+    struct dirent *dp;
+    
+    int is_a = -1, is_l = -1;
+    for(size_t i = 0; i<opt_size; i++){
+        printf("char: %s\n",options[i]);
+        if(strstr(options[i], "a") != NULL)
+        {
+            is_a = 0;
+            printf("isA");
+        }
+        else if(strstr(options[i], "l") != NULL)
+        {
+            is_l = 0;
+            printf("isL");
+        }
     }
-    struct dirent* fichierLu = NULL; /* Déclaration d'un pointeur vers la structure dirent. */
 
-    while ((fichierLu = readdir(rep)) != NULL)
-    {
-        if(strcmp(fichierLu->d_name,".") && strcmp(fichierLu->d_name,".."))
-            printf("%s\n", fichierLu->d_name);
+    if((directory = opendir(path)) == NULL){
+         return -1;
+    }
+    
+    struct stat filestat;
+    int nb_files = 0;
+
+    while((dp = readdir(directory)) != NULL) { 
+        nb_files++;
+    }
+    char* files_names[nb_files];
+
+
+    if((directory = opendir(path)) == NULL){
+         return -1;
     }
 
-    if (closedir(rep) == -1)
-        exit(-1);
+    size_t j = 0;
+    if( !is_a ){ //Option -a activé
+        while((dp = readdir(directory)) != NULL) { 
+            if(isDirectory(dp->d_name))
+                files_names[j] = concat(dp->d_name, "/");
+            else
+                files_names[j] = dp->d_name;
+            j++;
+        }
+    }
+    else{
+        while((dp = readdir(directory)) != NULL) { 
+            if( !(!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, ".."))){
+                if(isDirectory(dp->d_name))
+                    files_names[j] = concat(dp->d_name, "/");
+                else
+                    files_names[j] = dp->d_name;
+                j++;
+            }
+        }
+    }
 
+
+    if( !is_l ){
+
+        printf("Protection\tTaille\tLiens\tUID\tNom fichier\n");
+        for (size_t i = 0; i < nb_files; i++)
+        {
+            stat(files_names[i], &filestat);
+            //Permissions
+            printf( (S_ISDIR(filestat.st_mode)) ? "d" : "-");
+            printf( (filestat.st_mode & S_IRUSR) ? "r" : "-");
+            printf( (filestat.st_mode & S_IWUSR) ? "w" : "-");
+            printf( (filestat.st_mode & S_IXUSR) ? "x" : "-");
+            printf( (filestat.st_mode & S_IRGRP) ? "r" : "-");
+            printf( (filestat.st_mode & S_IWGRP) ? "w" : "-");
+            printf( (filestat.st_mode & S_IXGRP) ? "x" : "-");
+            printf( (filestat.st_mode & S_IROTH) ? "r" : "-");
+            printf( (filestat.st_mode & S_IWOTH) ? "w" : "-");
+            printf( (filestat.st_mode & S_IXOTH) ? "x" : "-");
+            printf("\t");
+            printf("%ld",filestat.st_size);
+            printf("\t");
+            printf("%lu",filestat.st_nlink);
+            printf("\t");
+            printf("%u",filestat.st_uid);
+            printf("\t");
+            printf("%s",files_names[i]);
+            printf("\n");
+
+        }
+        
+    }
+    else
+    {
+        for (size_t i = 0; i < nb_files; i++)
+        {
+            printf("%s",files_names[i]);
+            printf("\n");
+
+        }
+    }
+    
+    
+    
     return 0;
 }
