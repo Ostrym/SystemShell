@@ -54,6 +54,9 @@ Possibilité d’utiliser les trois redirections standards : `<`,` >` et `2>` qu
 
 ### Pipes 
 
+Possibilité d'utiliser les pipes.
+Exemple: ls | wc
+
 ## Bugs
 
 1. `-exec` de find ne marche pas
